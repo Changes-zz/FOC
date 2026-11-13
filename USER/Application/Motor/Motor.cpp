@@ -24,7 +24,7 @@ bool Motor::Init(Motor_Control_Mode requested_mode, float dc_voltage)
     mode = requested_mode;
     open_loop.SetAlignVoltage(1.0f);
     open_loop.SetAlignTime(1.0f);
-    open_loop.SetVoltageMagnitude(5.0f);
+    open_loop.SetVoltageMagnitude(3.0f);
     open_loop.SetAcceleration(10.0f);
     open_loop.SetTargetElectricalSpeed(target_velocity);
     initialized = true;

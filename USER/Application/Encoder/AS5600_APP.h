@@ -9,6 +9,8 @@ extern "C" {
 
 void AS5600_Init(void);
 void AS5600_Update(void);
+// 相对上电零点的机械角度，0～360°
+float AS5600_GetRelativeAngle(void);
 
 // 调试观察变量
 extern volatile uint8_t as5600_i2c_ok;

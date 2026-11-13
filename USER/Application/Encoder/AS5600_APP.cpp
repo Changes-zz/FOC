@@ -5,6 +5,7 @@
 
 // 创建 AS5600 对象
 static AS5600 encoder(&hi2c1);
+static float start_angle_deg = 0.0f;
 
 // 调试变量
 volatile uint8_t as5600_i2c_ok = 0;
@@ -31,6 +32,7 @@ extern "C" void AS5600_Init(void)
     {
         AS5600_Update();
     }
+    start_angle_deg = as5600_angle_deg;
 }
 
 
@@ -87,4 +89,11 @@ extern "C" void AS5600_Update(void)
     {
         as5600_reg_agc = -1.0f;
     }
+}
+
+extern "C" float AS5600_GetRelativeAngle(void)
+{
+    // 编码器方向与开环目标方向相反，因此取零点减当前角度。
+    float angle = start_angle_deg - as5600_angle_deg;
+    return angle < 0.0f ? angle + 360.0f : angle;
 }

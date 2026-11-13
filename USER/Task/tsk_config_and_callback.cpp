@@ -8,9 +8,7 @@
 #include "CurrentSense.h"
 #include "uart_printf.h"
 
-#include "PWM.h"
-#include "SVPWM.h"
-#include "OpenLoop.h"
+#include "Motor.h"
 #include <math.h>
 
 
@@ -27,9 +25,7 @@ float Current_imformation[3] = {0.0f, 0.0f, 0.0f};
 float Motor_imformation[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 // 电机驱动模块
-PWM pwm;
-SVPWM svpwm;
-OpenLoop open_loop;
+Motor motor;
 
 
 /**
@@ -45,20 +41,12 @@ void Task_Init()
     current_sense.Init();
     current_sense.CalibrateOffset(512);
 
-    pwm.Init();
-    open_loop.Init(pwm, svpwm, 24.0f);  // 与实测母线电压一致
+    // 初始化电机
+    motor.Init(Motor_Control_Mode::OpenLoop, 24.0f);
 
-    open_loop.SetAlignVoltage(1.0f);    // 预定位电压，V
-    open_loop.SetAlignTime(1.0f);       // 预定位时间，s
+    motor.SetVelocity(43.98f); // 14 对极，约 30 rpm
+    motor.Start();
 
-    open_loop.SetVoltageMagnitude(1.0f);         // 旋转电压矢量幅值，V
-    open_loop.SetTargetElectricalSpeed(7.33f);  // 14 对极，约 30 rpm
-    open_loop.SetAcceleration(10.0f);           // 电角加速度，rad/s²
-
-    open_loop.Start();
-    open_loop.Update(0.001f);
-    pwm.Start();
-    pwm.Enable();
 
     // 启动控制中断，按开环参数旋转磁场
     HAL_TIM_Base_Start_IT(&htim6);
@@ -72,12 +60,9 @@ void Task_Init()
  */
 void TIM_1ms_Callback()
 {
-    if (open_loop.GetState() != OpenLoop::State::IDLE)
+    if (motor.IsRunning())
     {
-        if (!open_loop.Update(0.001f))
-        {
-            open_loop.Stop();
-        }
+        motor.Update(0.001f);
     }
 }
 
@@ -123,10 +108,10 @@ void Task_loop()
     }
 
     // 电机调试信息更新
-    Motor_imformation[0] = open_loop.GetElectricalAngle() * (180.0f / 3.14159265359f); // 电角度，度
-    Motor_imformation[1] = as5600_angle_deg;
+    Motor_imformation[0] = motor.GetOpenLoopElectricalAngle() * (180.0f / 3.14159265359f); // 电角度，度
+    Motor_imformation[1] = AS5600_GetRelativeAngle();
     float mechanical_angle = fmodf(
-        open_loop.GetAccumulatedElectricalAngle() * (180.0f / 3.14159265359f) / 14.0f,
+        motor.GetOpenLoopAccumulatedElectricalAngle() * (180.0f / 3.14159265359f) / 14.0f,
         360.0f);
     Motor_imformation[2] = mechanical_angle < 0.0f ? mechanical_angle + 360.0f : mechanical_angle;
     Motor_imformation[3] = current_sense.GetUCurrent();
@@ -135,5 +120,5 @@ void Task_loop()
 
     vofa_justfloat_printf(Motor_imformation, 6);
 
-    HAL_Delay(10);
+    HAL_Delay(100);
 }
