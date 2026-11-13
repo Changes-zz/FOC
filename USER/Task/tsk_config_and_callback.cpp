@@ -8,7 +8,10 @@
 #include "CurrentSense.h"
 #include "uart_printf.h"
 
-#include "Motor.h"
+#include "PWM.h"
+#include "SVPWM.h"
+#include "OpenLoop.h"
+#include <math.h>
 
 
 /*全局变量定义*/
@@ -24,7 +27,9 @@ float Current_imformation[3] = {0.0f, 0.0f, 0.0f};
 float Motor_imformation[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 // 电机驱动模块
-Motor motor;
+PWM pwm;
+SVPWM svpwm;
+OpenLoop open_loop;
 
 
 /**
@@ -40,34 +45,23 @@ void Task_Init()
     current_sense.Init();
     current_sense.CalibrateOffset(512);
 
-    if (!motor.Init(24.0f))
-    {
-        return;
-    }
+    pwm.Init();
+    open_loop.Init(pwm, svpwm, 24.0f);  // 与实测母线电压一致
 
-    OpenLoop& open_loop = motor.OpenLoopControl();
+    open_loop.SetAlignVoltage(1.0f);    // 预定位电压，V
+    open_loop.SetAlignTime(1.0f);       // 预定位时间，s
 
-    // 设置开环参数
-    // open_loop.SetAlignVoltage(5.0f);
-    open_loop.SetAlignVoltage(1.0f);
-    open_loop.SetAlignTime(1.0f);
+    open_loop.SetVoltageMagnitude(1.0f);         // 旋转电压矢量幅值，V
+    open_loop.SetTargetElectricalSpeed(7.33f);  // 14 对极，约 30 rpm
+    open_loop.SetAcceleration(10.0f);           // 电角加速度，rad/s²
 
-    // open_loop.SetVoltageMagnitude(8.0f);
-    open_loop.SetVoltageMagnitude(5.0f);
-    open_loop.SetTargetElectricalSpeed(43.98f); // 14 对极，约 30 rpm
-    open_loop.SetAcceleration(10.0f);
-
-    if (!motor.Start())
-    {
-        return;
-    }
+    open_loop.Start();
+    open_loop.Update(0.001f);
+    pwm.Start();
+    pwm.Enable();
 
     // 启动控制中断，按开环参数旋转磁场
-    if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK)
-    {
-        motor.Stop();
-        return;
-    }
+    HAL_TIM_Base_Start_IT(&htim6);
 
     uart_printf("FOC Init Complete!\r\n");
 }
@@ -78,9 +72,12 @@ void Task_Init()
  */
 void TIM_1ms_Callback()
 {
-    if (motor.OpenLoopControl().GetState() != OpenLoop::State::IDLE)
+    if (open_loop.GetState() != OpenLoop::State::IDLE)
     {
-        motor.Update(0.001f);
+        if (!open_loop.Update(0.001f))
+        {
+            open_loop.Stop();
+        }
     }
 }
 
@@ -126,14 +123,17 @@ void Task_loop()
     }
 
     // 电机调试信息更新
-    Motor_imformation[0] = motor.OpenLoopControl().GetElectricalAngle();
+    Motor_imformation[0] = open_loop.GetElectricalAngle() * (180.0f / 3.14159265359f); // 电角度，度
     Motor_imformation[1] = as5600_angle_deg;
-    Motor_imformation[2] = motor.OpenLoopControl().GetElectricalSpeed();
+    float mechanical_angle = fmodf(
+        open_loop.GetAccumulatedElectricalAngle() * (180.0f / 3.14159265359f) / 14.0f,
+        360.0f);
+    Motor_imformation[2] = mechanical_angle < 0.0f ? mechanical_angle + 360.0f : mechanical_angle;
     Motor_imformation[3] = current_sense.GetUCurrent();
     Motor_imformation[4] = current_sense.GetVPhase().current;
     Motor_imformation[5] = current_sense.GetWPhase().current;
 
     vofa_justfloat_printf(Motor_imformation, 6);
 
-    HAL_Delay(100);
+    HAL_Delay(10);
 }

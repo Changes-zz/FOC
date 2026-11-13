@@ -48,6 +48,9 @@ public:
     // 获取当前电角度
     float GetElectricalAngle() const;
 
+    // 一个机械转周期内累计的电角度，单位 rad（14 对极）
+    float GetAccumulatedElectricalAngle() const;
+
     // 获取当前电角速度
     float GetElectricalSpeed() const;
 
@@ -87,6 +90,7 @@ private:
 
     // 当前电角度
     float electrical_angle = 0.0f;
+    float accumulated_electrical_angle = 0.0f;
 
     // 当前电角速度
     float electrical_speed = 0.0f;

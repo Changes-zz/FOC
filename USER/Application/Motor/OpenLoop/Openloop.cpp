@@ -27,6 +27,7 @@ bool OpenLoop::Init(PWM& pwm_driver,
     align_voltage = 0.5f;
 
     electrical_angle = 0.0f;
+    accumulated_electrical_angle = 0.0f;
     electrical_speed = 0.0f;
 
     align_timer = 0.0f;
@@ -54,6 +55,7 @@ void OpenLoop::Start()
     }
 
     electrical_angle = 0.0f;
+    accumulated_electrical_angle = 0.0f;
     electrical_speed = 0.0f;
     align_timer = 0.0f;
 
@@ -140,7 +142,18 @@ bool OpenLoop::Update(float dt)
     }
 
     // 更新电角度
-    electrical_angle += electrical_speed * dt;
+    const float angle_step = electrical_speed * dt;
+    electrical_angle += angle_step;
+    accumulated_electrical_angle += angle_step;
+    const float mechanical_revolution = TWO_PI * 14.0f;
+    if (accumulated_electrical_angle >= mechanical_revolution)
+    {
+        accumulated_electrical_angle -= mechanical_revolution;
+    }
+    else if (accumulated_electrical_angle < 0.0f)
+    {
+        accumulated_electrical_angle += mechanical_revolution;
+    }
 
     NormalizeAngle();
 
@@ -240,6 +253,11 @@ void OpenLoop::SetAcceleration(float value)
 float OpenLoop::GetElectricalAngle() const
 {
     return electrical_angle;
+}
+
+float OpenLoop::GetAccumulatedElectricalAngle() const
+{
+    return accumulated_electrical_angle;
 }
 
 
